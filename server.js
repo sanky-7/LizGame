@@ -34,13 +34,34 @@ app.get('/api/scores', async (req, res) => {
     res.json(scores);
 });
 
-app.post('/api/scores', async (req, res) => {
+app.post("/api/scores", async (req, res) => {
     const { name, score } = req.body;
-    if (!name || !score) return res.status(400).json({ error: 'Invalid data' });
-
-    const newScore = new Score({ name, score });
-    await newScore.save();
-    res.json({ message: 'Score saved successfully' });
+  
+    // Fetch current top 5 scores
+    const topScores = await Score.find().sort({ score: -1 }).limit(5);
+  
+    // If less than 5 scores exist, add the new score
+    if (topScores.length < 5) {
+      const newScore = new Score({ name, score });
+      await newScore.save();
+      return res.json(newScore);
+    }
+  
+    // Check if the new score qualifies for the top 5
+    const lowestScore = topScores[topScores.length - 1];
+  
+    if (score > lowestScore.score) {
+      // Insert the new score
+      const newScore = new Score({ name, score });
+      await newScore.save();
+  
+      // Remove the lowest score from the database
+      await Score.findByIdAndDelete(lowestScore._id);
+  
+      return res.json(newScore);
+    }
+    
+    res.json({ message: "Score is not high enough to enter the top 5." });
 });
 
 // Handle all other routes and serve index.html

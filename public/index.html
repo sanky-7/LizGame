@@ -381,9 +381,9 @@
             replayBtn.style.display = 'block';
 
             // Save score to MongoDB if it's in the top 5
-            const topScores = await fetch('/api/scores').then(res => res.json());
+            const topScores = await fetch('https://lizgame.onrender.com/api/scores').then(res => res.json());
             if (topScores.length < 5 || score > topScores[4].score) {
-                await fetch('/api/scores', {
+                await fetch('https://lizgame.onrender.com/api/scores', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name: playerName, score: Math.floor(score / 5) }),
@@ -395,7 +395,7 @@
         }
 
       async function updateLeaderboard() {
-            const scores = await fetch('/api/scores').then(res => res.json());
+            const scores = await fetch('https://lizgame.onrender.com/api/scores').then(res => res.json());
             scoresList.innerHTML = scores
                 .map((score, index) => `<li>${index + 1}. ${score.name}: ${score.score}</li>`)
                 .join('');
