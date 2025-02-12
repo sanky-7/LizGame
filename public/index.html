@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Life of Liz</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="icon"
+      type="image/png"
+      href="https://cdn.discordapp.com/attachments/1229849891249848330/1339309556685078658/LizHurt.png?ex=67ae40b9&is=67acef39&hm=9e28851ced441fc08ddadff6005451fa2dffe1aac3960585a7cb941cf9703bbf&"
+    />
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: white;
+        touch-action: manipulation;
+        font-family: Arial, sans-serif;
+      }
+
+      #gameCanvas {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      #score {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        font-size: 20px;
+        color: #333;
+      }
+
+      #replayBtn {
+        position: fixed;
+        top: 60%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        padding: 15px 30px;
+        font-size: 20px;
+        display: none;
+        cursor: pointer;
+        background-color: #444;
+        color: white;
+        border: none;
+        border-radius: 5px;
+      }
+
+      #nameInput {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        padding: 10px;
+        font-size: 16px;
+        display: block;
+      }
+
+      #leaderboard {
+        position: fixed;
+        bottom: 10px;
+        left: 10px;
+        font-size: 16px;
+        color: #333;
+        background: rgba(255, 255, 255, 0.8);
+        padding: 10px;
+        border-radius: 5px;
+      }
+
+      @media (max-width: 600px) {
+        #score {
+          font-size: 16px;
+        }
+        #replayBtn {
+          font-size: 18px;
+          padding: 10px 20px;
+        }
+        #nameInput {
+          font-size: 14px;
+        }
+        #leaderboard {
+          font-size: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="score">Lehj points: 0</div>
+    <canvas id="gameCanvas"></canvas>
+    <button id="replayBtn">Play Again</button>
+    <input type="text" id="nameInput" placeholder="Enter your name" />
+    <div id="leaderboard">
+      <h3>Top 5 Scores</h3>
+      <ul id="scoresList"></ul>
+    </div>
+
+    <script>
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d');
+      const scoreElement = document.getElementById('score');
+      const replayBtn = document.getElementById('replayBtn');
+      const nameInput = document.getElementById('nameInput');
+      const scoresList = document.getElementById('scoresList');
+
+      let playerName = '';
+      let isGameRunning = false;
+
+      // Hide name input and show game when name is entered
+      nameInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+              playerName = nameInput.value.trim();
+              if (playerName) {
+                  nameInput.style.display = 'none';
+                  isGameRunning = true;
+                  resetGame();
+              }
+          }
+      });
+
+      // Set canvas size dynamically
+      function setCanvasSize() {
+          canvas.width = window.innerWidth;
+          canvas.height = window.innerHeight * 0.3; // Adjust height for mobile
+      }
+      setCanvasSize();
+      window.addEventListener('resize', setCanvasSize);
+
+      // Game variables
+      let isJumping = false;
+      let canDoubleJump = false;
+      let score = 0;
+      let speed = 5;
+      let gravity = 0.6;
+
+      // Dino variables
+      const dino = {
+          x: 50,
+          y: canvas.height - 50,
+          width: 40,
+          height: 60,
+          velocity: 0,
+          image: null // Will hold the current dino image
+      };
+
+      // Dino hitbox (smaller than the actual dino)
+      const dinoHitbox = {
+          width: 30, // Smaller width
+          height: 40 // Smaller height
+      };
+
+      // Obstacle variables
+      let obstacles = [];
+      const obstacleWidth = 30;
+      const obstacleHeight = 40;
+
+      // Obstacle hitbox (smaller than the actual obstacle)
+      const obstacleHitbox = {
+          width: 20, // Smaller width
+          height: 30 // Smaller height
+      };
+
+      const minGap = 350; // Minimum space between obstacles
+
+      // Cloud variables
+      let clouds = [];
+      const cloudWidth = 180; // Increased cloud width
+      const cloudHeight = 100; // Increased cloud height
+
+      // Load images
+      const images = {
+          dinoNormal: new Image(),
+          dinoHurt: new Image(),
+          cactus1: new Image(),
+          cactus2: new Image(),
+          cactus3: new Image(),
+          cloud: new Image(),
+          sun: new Image()
+      };
+
+      // Replace these URLs with your actual image paths
+      images.dinoNormal.src = 'https://cdn.discordapp.com/attachments/1229849891249848330/1339309556685078658/LizHurt.png?ex=67ae40b9&is=67acef39&hm=9e28851ced441fc08ddadff6005451fa2dffe1aac3960585a7cb941cf9703bbf&'; // Normal dino
+      images.dinoHurt.src = 'https://cdn.discordapp.com/attachments/1229849891249848330/1339311718702125117/3448A5F8-0494-4A09-A2AA-1070A82BFB50.png?ex=67ae42bc&is=67acf13c&hm=ad4a9c8302836f0e0853bedd6f75ff93c58e427ada2a2f10998a9de1ee82c877&'; // Hurt dino
+      images.cactus1.src = 'https://cdn.discordapp.com/attachments/1229849891249848330/1339315086333841439/obs1-removebg-preview.png?ex=67ae45df&is=67acf45f&hm=c1fa2ab749c5f7241849ce3589026c0d4378e9ab628fd93b829e147d0a0bb8ca&'; // Cactus 1
+      images.cactus2.src = 'https://cdn.discordapp.com/attachments/1229849891249848330/1339315099420197006/obs2-removebg-preview.png?ex=67ae45e2&is=67acf462&hm=0e9eca3cb618dab9e0c9002cff6a32076255cfbbef8bb7b07fd043aa3d233c29&'; // Cactus 2
+      images.cactus3.src = 'https://cdn.discordapp.com/attachments/1229849891249848330/1339315115987566692/obs3-removebg-preview.png?ex=67ae45e6&is=67acf466&hm=85bc34c2651a349394c584404ee738d2996c0a5889fcc2172900eeec4206ea3d&'; // Cactus 3
+      images.cloud.src = 'https://cdn.discordapp.com/attachments/1229849891249848330/1339298316806262836/pngegg.png?ex=67ae3641&is=67ace4c1&hm=9d455ec7af380e668abbf690471f489d039bf03ebe3032f5ace6c788ab9480cd&'; // Cloud
+      images.sun.src = 'https://img.icons8.com/color/48/000000/sun.png'; // Sun
+
+      // List of obstacle images to randomize
+      const obstacleImages = [images.cactus1, images.cactus2, images.cactus3];
+
+      // Ensure images are loaded before starting the game
+      let imagesLoaded = 0;
+      for (const key in images) {
+          images[key].onload = () => {
+              imagesLoaded++;
+              if (imagesLoaded === Object.keys(images).length) {
+                  dino.image = images.dinoNormal; // Set initial dino image
+                  if (isGameRunning) gameLoop(); // Start the game only after all images are loaded
+              }
+          };
+      }
+
+      // Draw gradient background
+      function drawBackground() {
+          const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+          gradient.addColorStop(0, '#ffbe88');
+          gradient.addColorStop(0.5, '#ffb6c4');
+          gradient.addColorStop(1, '#ffd5db');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      // Draw sun in the far right of the sky
+      function drawSun() {
+          const sunSize = 90; // Increased sun size
+          ctx.drawImage(images.sun, canvas.width/2 - sunSize - 10, 10, sunSize, sunSize);
+      }
+
+      // Generate clouds
+      function generateClouds() {
+          if (Math.random() < 0.01) { // Adjust probability for cloud generation
+              const y = Math.random() * (canvas.height / 3); // Clouds appear in the top third of the canvas
+              clouds.push({
+                  x: canvas.width,
+                  y: y,
+                  width: cloudWidth,
+                  height: cloudHeight
+              });
+          }
+      }
+
+      // Draw clouds with light pink tint
+      function drawClouds() {
+          clouds.forEach((cloud, index) => {
+              cloud.x -= speed / 2; // Clouds move slower than obstacles
+
+              // Apply light pink tint to the cloud
+              ctx.save(); // Save the current canvas state
+              ctx.filter = 'hue-rotate(-30deg) saturate(2) brightness(1.2)'; // Light pink tint
+              ctx.drawImage(images.cloud, cloud.x, cloud.y, cloud.width, cloud.height);
+              ctx.restore(); // Restore the canvas state
+
+              // Remove clouds that are off screen
+              if (cloud.x + cloud.width < 0) {
+                  clouds.splice(index, 1);
+              }
+          });
+      }
+
+      // Game loop
+      function gameLoop() {
+          if (!isGameRunning) return;
+
+          // Draw gradient background
+          drawBackground();
+
+          // Draw sun
+          drawSun();
+
+          // Generate and draw clouds
+          generateClouds();
+          drawClouds();
+
+          // Update dino
+          dino.y += dino.velocity;
+          dino.velocity += gravity;
+
+          // Ground collision
+          if (dino.y >= canvas.height - dino.height) {
+              dino.y = canvas.height - dino.height;
+              dino.velocity = 0;
+              isJumping = false;
+              canDoubleJump = false; // Reset double jump when landing
+          }
+
+          // Update obstacles
+          obstacles.forEach((obstacle, index) => {
+              obstacle.x -= speed;
+
+              // Collision detection with smaller hitboxes
+              if (checkCollision(dino, obstacle)) {
+                  gameOver();
+                  return; // Stop further updates
+              }
+
+              // Remove obstacles that are off screen
+              if (obstacle.x + obstacleWidth < 0) {
+                  obstacles.splice(index, 1);
+              }
+          });
+
+          // Generate new obstacles with proper spacing
+          if (Math.random() < 0.02) {
+              createObstacle();
+          }
+
+          // Draw elements
+          drawDino();
+          drawObstacles();
+          updateScore();
+
+          // Increase speed slightly over time
+          speed += 0.002;
+
+          if (isGameRunning) {
+              requestAnimationFrame(gameLoop);
+          }
+      }
+
+      function drawDino() {
+          ctx.drawImage(dino.image, dino.x, dino.y, dino.width, dino.height);
+      }
+
+      function drawObstacles() {
+          obstacles.forEach(obstacle => {
+              ctx.drawImage(obstacle.image, obstacle.x, obstacle.y, obstacleWidth, obstacleHeight);
+          });
+      }
+
+      function createObstacle() {
+          // Ensure proper spacing between obstacles
+          const lastObstacle = obstacles[obstacles.length - 1];
+          if (!lastObstacle || (canvas.width - lastObstacle.x) >= minGap) {
+              // Randomly select an obstacle image
+              const randomImage = obstacleImages[Math.floor(Math.random() * obstacleImages.length)];
+              obstacles.push({
+                  x: canvas.width,
+                  y: canvas.height - obstacleHeight - 10,
+                  image: randomImage // Assign the random image to the obstacle
+              });
+          }
+      }
+
+      function checkCollision(dino, obstacle) {
+          // Calculate hitbox positions
+          const dinoHitboxX = dino.x + (dino.width - dinoHitbox.width) / 2;
+          const dinoHitboxY = dino.y + (dino.height - dinoHitbox.height);
+          const obstacleHitboxX = obstacle.x + (obstacleWidth - obstacleHitbox.width) / 2;
+          const obstacleHitboxY = obstacle.y + (obstacleHeight - obstacleHitbox.height);
+
+          // Check collision between hitboxes
+          return dinoHitboxX < obstacleHitboxX + obstacleHitbox.width &&
+                 dinoHitboxX + dinoHitbox.width > obstacleHitboxX &&
+                 dinoHitboxY < obstacleHitboxY + obstacleHitbox.height &&
+                 dinoHitboxY + dinoHitbox.height > obstacleHitboxY;
+      }
+
+      function jump() {
+          if (isGameRunning) {
+              if (!isJumping) {
+                  // First jump
+                  dino.velocity = -12;
+                  isJumping = true;
+                  canDoubleJump = true; // Allow double jump after the first jump
+              } else if (canDoubleJump) {
+                  // Double jump
+                  dino.velocity = -12;
+                  canDoubleJump = false; // Disable double jump after use
+              }
+          }
+      }
+
+      function updateScore() {
+          score++;
+          scoreElement.textContent = `Lehj points: ${Math.floor(score / 5)}`;
+      }
+
+      async function gameOver() {
+            isGameRunning = false;
+            dino.image = images.dinoHurt;
+
+            // Draw "Game Over" text
+            ctx.fillStyle = 'red';
+            ctx.font = '30px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Game Over!', canvas.width / 2, canvas.height / 2);
+
+            // Show replay button
+            replayBtn.style.display = 'block';
+
+            // Save score to MongoDB if it's in the top 5
+            const topScores = await fetch('/api/scores').then(res => res.json());
+            if (topScores.length < 5 || score > topScores[4].score) {
+                await fetch('/api/scores', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: playerName, score: Math.floor(score / 5) }),
+                });
+            }
+
+            // Update leaderboard
+            await updateLeaderboard();
+        }
+
+      async function updateLeaderboard() {
+            const scores = await fetch('/api/scores').then(res => res.json());
+            scoresList.innerHTML = scores
+                .map((score, index) => `<li>${index + 1}. ${score.name}: ${score.score}</li>`)
+                .join('');
+        }
+
+      function resetGame() {
+          // Reset game state
+          isGameRunning = true;
+          score = 0;
+          speed = 5;
+          obstacles = [];
+          clouds = [];
+          dino.y = canvas.height - 50;
+          dino.velocity = 0;
+          dino.image = images.dinoNormal; // Reset dino image to normal
+          isJumping = false;
+          canDoubleJump = false; // Reset double jump
+          replayBtn.style.display = 'none';
+          scoreElement.textContent = `Lehj points: 0`;
+          gameLoop();
+      }
+
+      // Event listeners
+      document.addEventListener('keydown', (e) => {
+          if (e.code === 'Space') {
+              if (isGameRunning) jump();
+              else resetGame();
+          }
+      });
+
+      document.addEventListener('touchstart', () => {
+          if (isGameRunning) jump();
+          else resetGame();
+      });
+
+      replayBtn.addEventListener('click', resetGame);
+
+      updateLeaderboard();
+    </script>
+  </body>
+</html>
